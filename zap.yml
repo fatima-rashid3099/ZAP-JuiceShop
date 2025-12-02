@@ -1,0 +1,42 @@
+name: Juice Shop Security Scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  security_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Start Juice Shop
+      run: |
+        docker run -d --name juiceshop -p 3000:3000 bkimminich/juice-shop
+        echo "Waiting for Juice Shop to start..."
+        sleep 60
+    - name: Run ZAP Baseline Scan
+      run: |
+        docker run --rm \
+          -v $(pwd):/zap/wrk/:rw \
+          --network host \
+          ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+          -t http://localhost:3000 \
+          -r zap-report.html \
+          -J zap-report.json \
+          -x zap-report.xml \
+          -I
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          zap-report.html
+          zap-report.json
+          zap-report.xml
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: docker rm -f juiceshop || true
